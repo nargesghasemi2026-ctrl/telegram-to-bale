@@ -1,0 +1,65 @@
+name: Telegram to Bale
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telegram-to-bale
+  cancel-in-progress: true
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run Telegram to Bale poller
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          BALE_BOT_TOKEN: ${{ secrets.BALE_BOT_TOKEN }}
+
+          TELEGRAM_SOURCE_CHANNEL: "@Nargesacademy8"
+          BALE_TARGET_CHANNEL: "@NargesAcademy"
+          BALE_SUPPORT_ID: "@poshtibani_ghasemi"
+
+          OLD_SUPPORT_IDS: ${{ secrets.OLD_SUPPORT_IDS }}
+
+          RUN_SECONDS: "180"
+
+        run: |
+          echo "Starting Telegram -> Bale..."
+          python poller.py
+
+      - name: Save Telegram offset
+        if: always()
+        run: |
+          if [ -f telegram_offset.json ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            git add telegram_offset.json
+
+            if ! git diff --cached --quiet; then
+              git commit -m "Update Telegram offset"
+              git pull --rebase origin main || true
+              git push origin main
+            fi
+          fi
